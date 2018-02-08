@@ -11,8 +11,6 @@ This code repository stores Data files and Python code for "A Model of Sleep, Le
 Sections
 ========
 - Data
--- ATUS
--- other
 - Python Code
 - Paper Draft
 
