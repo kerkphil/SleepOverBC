@@ -24,19 +24,20 @@ calculated and reported.
 Impulse reposnse functions are calculated and plotted.
 
 The model is fit to data over 2003Q1 - 2017Q1.  The shocks that exactly
-replicate the observed hours worked series are calculated.  These are then used
-to generate a prediction for GDP which is compared with the GDP data.
-Predictions for hours slept are also calculated and plotted against ATUS data.
+replicate the observed GDP series are calculated.  These are then used to 
+generate a prediction for hours of labor and sleep which is compared with the 
+ATUS data.
+
 Predictions for all other endogenous variables are also calcuated.  
 
 
 Code written by Kerk l. Phillips
 Oct. 25, 2017
 
-Updated on Nov. 16, 2017
+Updated on Feb. 28, 2018
 """
 
-modname = 'BCEconSleepLin1'
+modname = 'BCEconSleepLin2'
 
 import numpy as np
 import scipy.optimize as opt
@@ -196,7 +197,7 @@ def mSS_c(theta, *cparams):
 phi = 1.
 xi = 0.
 kappa = 1.
-eta = .92  # sleep volatility and cyclicality no longer responsive to this
+eta = .73  #choose to hit peak sleep in 2009
 alpha = .33
 delta = .01
 beta = .99
@@ -204,8 +205,8 @@ gamma = 1.5
 lambd = 1.0
 Nbar = 3.16+3.78/2
 Sbar = 8.81 #8.97
-rho_z = .87
-sigma_z = .0044
+rho_z = .87      #choose to hit GDP autocorr
+sigma_z = .0044  #choose to hit GDP stdev
 A = 1.
 
 # put model parameters into a list
@@ -379,7 +380,7 @@ def runsim(Zhist, nobs, params, LinCoeffs, bars):
         whist, rhist, Chist, Ihist, uChist, uLhist, uShist, uhist
 
 
-nobs = 1000000
+nobs = 1000
 
 # generate history of z's and y's
 zhist = np.zeros(nobs)
@@ -527,9 +528,9 @@ fig1, fig2 = plotvars(serlist, start, sample)
 
 time = range(0, sample)
 fig4 = plt.figure()
-plt.plot(time, 60*(Nhist[start:start+sample] - Nbar), label='Work')
-plt.plot(time, 60*(Lhist[start:start+sample] - Lbar), label='Leisure')
-plt.plot(time, 60*(Shist[start:start+sample] - Sbar), label='Sleep')
+plt.plot(time, 60*(Nhist[start:start+sample] - Nbar), 'k-', label='Work')
+plt.plot(time, 60*(Lhist[start:start+sample] - Lbar), 'k--', label='Leisure')
+plt.plot(time, 60*(Shist[start:start+sample] - Sbar), 'k:', label='Sleep')
 plt.legend()
 plt.ylabel('Minutes per Day')
 plt.savefig(modname + '_TimeUse.pdf', format='pdf', dpi=2000)
@@ -570,12 +571,36 @@ else:
 Y = np.exp(Ydev)*Ybar
 
 # consumption
-C = np.log(BCdata[:,6])
+C = np.log(BCdata[:,8])
 if HP:
     Cdev, Ctrd = sm.tsa.filters.hpfilter(C)
 else:
     Cdev, Ctrd = sm.tsa.filters.cffilter(C, low=lfreq, high=hfreq)
 C = np.exp(Cdev)*Cbar
+
+# investment
+I = np.log(BCdata[:,7])
+if HP:
+    Idev, Itrd = sm.tsa.filters.hpfilter(I)
+else:
+    Idev, Itrd = sm.tsa.filters.cffilter(I, low=lfreq, high=hfreq)
+I = np.exp(Idev)*Ibar
+
+# government purchases
+G = np.log(BCdata[:,9])
+if HP:
+    Gdev, Gtrd = sm.tsa.filters.hpfilter(G)
+else:
+    Gdev, Gtrd = sm.tsa.filters.cffilter(G, low=lfreq, high=hfreq)
+G = np.exp(Gdev)
+
+# consumption plus governement
+CG = np.log(BCdata[:,8]+BCdata[:,9])
+if HP:
+    CGdev, CGtrd = sm.tsa.filters.hpfilter(CG)
+else:
+    CGdev, CGtrd = sm.tsa.filters.cffilter(CG, low=lfreq, high=hfreq)
+CG = np.exp(CGdev)
 
 # labor is market and home
 N = np.log(BCdata[:,3]+BCdata[:,4]/2)
@@ -607,18 +632,39 @@ Navg = np.mean(Nraw)
 Savg = np.mean(Sraw)
 Lavg = np.mean(Lraw)
 
-# plot unfiltered hoursa radjusting from per quarter to per day
+# plot unfiltered hours radjusting from per quarter to per day
 plt.figure()
-plt.plot(time, Nbar*Nraw/Navg, label='Work')
-plt.plot(time, Sbar*Sraw/Savg, label='Sleep')
-plt.plot(time, (24-Nbar-Sbar)*Lraw/Lavg, label='Leisure')
+plt.plot(time, Nbar*Nraw/Navg, 'k-', label='Work')
+plt.plot(time, (24-Nbar-Sbar)*Lraw/Lavg, 'k--', label='Leisure')
+plt.plot(time, Sbar*Sraw/Savg, 'k:', label='Sleep')
 plt.legend(loc=5, ncol=1)
 plt.ylabel('Hours per Day')
 plt.savefig(modname + '_raw.pdf', format='pdf', dpi=2000)
 plt.show()
 
+def matchY(z,K,Y,params,RR,SS,Kbar,Nbar,Sbar):
+    # This function takes inputs of K, Y, and z along with parameters and 
+    # finds the deviation of actual Y from predicted Y
+    N = RR[0,0]*(K-Kbar) + SS[0,0]*z + Nbar
+    S = RR[1,0]*(K-Kbar) + SS[1,0]*z + Sbar
+    b = kappa*S**eta
+    Dev = Y - A*np.exp(z)*K**alpha*(b*N)**(1-alpha)
+    
+    return Dev
+
+
+def findz(K,Y,params,RR,SS,Kbar,Nbar,Sbar):
+    zguess = 0.
+    f = lambda z: matchY(z,K,Y,params,RR,SS,Kbar,Nbar,Sbar)
+    z = opt.fsolve(f, zguess)
+    
+    return z
+
 # recover z from model jump function for N
-z = (Ndev-RR[0,0]*Kdev)/SS[0,0]
+z = np.zeros(nobs)
+for t in range(0,nobs):
+    z[t] = findz(K[t],Y[t],params,RR,SS,Kbar,Nbar,Sbar)
+
 
 # construct N & S from jump functions
 Nmod = RR[0,0]*Kdev + SS[0,0]*z + Nbar
@@ -673,17 +719,17 @@ else:
 
 # plot model histories
 plt.figure()
-plt.plot(time2, N[0:nobs], label='data')
-plt.plot(time2, Nmod[0:nobs], label='model')
+plt.plot(time2, N[0:nobs], 'k-', label='data')
+plt.plot(time2, Nmod[0:nobs], 'k--', label='model')
 plt.title('Work Hours')
 plt.legend(loc=4, ncol=2)
-plt.ylabel('Hours per Week')
+plt.ylabel('Hours per Day')
 plt.savefig(modname + '_Npred.pdf', format='pdf', dpi=2000)
 plt.show()
 
 plt.figure()
-plt.plot(time2, Y[0:nobs]/Ybar, label='data')
-plt.plot(time2, Ymod/Ybar, label='model')
+plt.plot(time2, Y[0:nobs]/Ybar, 'k-', label='data')
+plt.plot(time2, Ymod/Ybar, 'k--', label='model')
 plt.title('GDP')
 plt.ylabel('Relative to Model Steady State')
 plt.legend(loc=4, ncol=2)
@@ -691,8 +737,8 @@ plt.savefig(modname + '_Ypred.pdf', format='pdf', dpi=2000)
 plt.show()
 
 plt.figure()
-plt.plot(time2, C[0:nobs]/Cbar, label='data')
-plt.plot(time2, Cmod/Cbar, label='model')
+plt.plot(time2, C[0:nobs]/Cbar, 'k-', label='data')
+plt.plot(time2, Cmod/Cbar, 'k--', label='model')
 plt.title('Consumption')
 plt.ylabel('Relative to Model Steady State')
 plt.legend(loc=4, ncol=2)
@@ -700,10 +746,33 @@ plt.savefig(modname + '_Cpred.pdf', format='pdf', dpi=2000)
 plt.show()
 
 plt.figure()
-plt.plot(time2, S[0:nobs], label='data')
-plt.plot(time2, Smod[0:nobs], label='model')
+plt.plot(time2, I[0:nobs]/Ibar, 'k-', label='data')
+plt.plot(time2, Imod/Ibar, 'k--', label='model')
+plt.title('Investment')
+plt.ylabel('Relative to Model Steady State')
+plt.legend(loc=4, ncol=2)
+plt.savefig(modname + '_Ipred.pdf', format='pdf', dpi=2000)
+plt.show()
+#
+#plt.figure()
+#plt.plot(time2, G[0:nobs], label='data')
+#plt.title('Government Purchases')
+#plt.ylabel('Relative to Trend')
+#plt.savefig(modname + '_Gsmoothed.pdf', format='pdf', dpi=2000)
+#plt.show()
+#
+#plt.figure()
+#plt.plot(time2, CG[0:nobs], label='data')
+#plt.title('Consumption and Government Purchases')
+#plt.ylabel('Relative to Trend')
+#plt.savefig(modname + '_CGsmoothed.pdf', format='pdf', dpi=2000)
+#plt.show()
+
+plt.figure()
+plt.plot(time2, S[0:nobs], 'k-', label='data')
+plt.plot(time2, Smod[0:nobs], 'k--', label='model')
 plt.title('Sleep Hours')
-plt.ylabel('Hours per Week')
+plt.ylabel('Hours per Day')
 plt.legend(loc=4, ncol=2)
 plt.savefig(modname + '_Spred.pdf', format='pdf', dpi=2000)
 plt.show()
@@ -735,8 +804,8 @@ Cdol2 = rconpc*Cperc2
 Cdol3 = rconpc*Cperc3
 
 plt.figure()
-plt.plot(time2, Cdol, label='model hours')
-plt.plot(time2, Cdol2, label='actual hours')
+plt.plot(time2, Cdol2, 'k-', label='actual hours')
+plt.plot(time2, Cdol, 'k--', label='model hours')
 #plt.plot(time2, Cdol3, label='US data')
 plt.title('Sleep Compensation')
 plt.ylabel('2009 dollars')
@@ -746,15 +815,15 @@ plt.show()
 
 plt.figure()
 plt.subplot(2,1,1)
-plt.plot(time2, uCmod, label='model hours')
-plt.plot(time2, uCmod2, label='actual hours')
+plt.plot(time2, uCmod2, 'k-', label='actual hours')
+plt.plot(time2, uCmod, 'k--', label='model hours')
 #plt.plot(time2, uCact[0:nobs], label='US data')
 plt.title('Consumption Utility')
 plt.legend(loc=4, ncol=3)
 plt.xticks([])
 plt.subplot(2,1,2)
-plt.plot(time2, uSmod)
-plt.plot(time2, uSmod2, label='actual model')
+plt.plot(time2, uSmod, 'k--',)
+plt.plot(time2, uSmod2, 'k-',)
 plt.title('Sleep Utility')
 plt.savefig(modname + '_util.pdf', format='pdf', dpi=2000)
 plt.show()
