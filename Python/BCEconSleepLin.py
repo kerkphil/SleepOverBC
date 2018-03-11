@@ -37,7 +37,7 @@ Oct. 25, 2017
 Updated on Feb. 28, 2018
 """
 
-modname = 'BCEconSleepLin2'
+modname = 'BCEconSleepLin'
 
 import numpy as np
 import scipy.optimize as opt
@@ -203,8 +203,8 @@ delta = .01
 beta = .99
 gamma = 1.5
 lambd = 1.0
-Nbar = 3.16+3.78/2
-Sbar = 8.81 #8.97
+Nbar = 3.62 +3.42/2
+Sbar = 9.01 
 rho_z = .87      #choose to hit GDP autocorr
 sigma_z = .0044  #choose to hit GDP stdev
 A = 1.
@@ -217,7 +217,7 @@ cparams = (phi, xi, kappa, eta, alpha, delta, beta, gamma, lambd, \
 # put guesses into np vector
 Kbar = 1000.
 chiL = 1.4
-chiS = -.05
+chiS = .05
 guess = np.array([Kbar, chiL, chiS])
 
 # set up lambda function
@@ -380,7 +380,7 @@ def runsim(Zhist, nobs, params, LinCoeffs, bars):
         whist, rhist, Chist, Ihist, uChist, uLhist, uShist, uhist
 
 
-nobs = 1000
+nobs = 1000000
 
 # generate history of z's and y's
 zhist = np.zeros(nobs)
@@ -398,6 +398,9 @@ for t in range(0,nobs):
 Khist, Nhist, Shist, Lhist, dhist, bhist, Yhist, \
     whist, rhist, Chist, Ihist, uChist, uLhist, uShist, uhist = \
     runsim(Zhist, nobs, params, LinCoeffs, bars)
+    
+# adjust wages to include effectiveness due to sleep
+whist = whist*bhist
 
 # -----------------------------------------------------------------------------
 # PLOT SUBSAMPLE
@@ -467,17 +470,17 @@ fig1, fig2 = plotvars(serlist, start, sample)
 # CALCULATE AND REPORT MOMENTS
 
 Datahist = np.vstack((np.log(Yhist[start:nobs-1]), \
-                      np.log(Nhist[start:nobs-1]), \
-                      np.log(Shist[start:nobs-1]), \
-                      np.log(Lhist[start:nobs-1]), \
-                      np.log(whist[start:nobs-1]), \
-                      rhist[start:nobs-1], \
-                      np.log(Chist[start:nobs-1]), \
-                      np.log(Ihist[start:nobs-1]), \
-                      uChist[start:nobs-1], \
-                      uLhist[start:nobs-1], \
-                      uShist[start:nobs-1], \
-                      uhist[start:nobs-1]))
+      np.log(Nhist[start:nobs-1]), \
+      np.log(Shist[start:nobs-1]), \
+      np.log(Lhist[start:nobs-1]), \
+      np.log(whist[start:nobs-1]), \
+      rhist[start:nobs-1], \
+      np.log(Chist[start:nobs-1]), \
+      np.log(Ihist[start:nobs-1]), \
+      uChist[start:nobs-1], \
+      uLhist[start:nobs-1], \
+      uShist[start:nobs-1], \
+      uhist[start:nobs-1]))
 
 varindex = ['log Y', 'log N', 'log S', 'log L', 'log w', 'r', 'log C', \
             'log I', 'uC', 'uL', 'uS', 'u']
@@ -492,6 +495,7 @@ BCdf.index = varindex
 BCdf.columns = momindex
 print (BCdf.to_latex())
 BCdf.to_excel(writer,'LT')
+writer.save()
 
 # -----------------------------------------------------------------------------
 # IMPULSE RESPONSE FUNCTIONS
@@ -813,20 +817,20 @@ plt.legend(loc=4, ncol=3)
 plt.savefig(modname + '_comp.pdf', format='pdf', dpi=2000)
 plt.show()
 
-plt.figure()
-plt.subplot(2,1,1)
-plt.plot(time2, uCmod2, 'k-', label='actual hours')
-plt.plot(time2, uCmod, 'k--', label='model hours')
-#plt.plot(time2, uCact[0:nobs], label='US data')
-plt.title('Consumption Utility')
-plt.legend(loc=4, ncol=3)
-plt.xticks([])
-plt.subplot(2,1,2)
-plt.plot(time2, uSmod, 'k--',)
-plt.plot(time2, uSmod2, 'k-',)
-plt.title('Sleep Utility')
-plt.savefig(modname + '_util.pdf', format='pdf', dpi=2000)
-plt.show()
+#plt.figure()
+#plt.subplot(2,1,1)
+#plt.plot(time2, uCmod2, 'k-', label='actual hours')
+#plt.plot(time2, uCmod, 'k--', label='model hours')
+##plt.plot(time2, uCact[0:nobs], label='US data')
+#plt.title('Consumption Utility')
+#plt.legend(loc=4, ncol=3)
+#plt.xticks([])
+#plt.subplot(2,1,2)
+#plt.plot(time2, uSmod, 'k--',)
+#plt.plot(time2, uSmod2, 'k-',)
+#plt.title('Sleep Utility')
+#plt.savefig(modname + '_util.pdf', format='pdf', dpi=2000)
+#plt.show()
 
 # use this code for comparing results with different hours worked series
 #plt.figure()

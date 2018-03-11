@@ -14,7 +14,7 @@ import statsmodels.api as sm
 from DSGEmoments import calcmom
 
 # load data on output and capital stock
-ATUSdata = pd.read_excel('quartertotals.xls', index_col = 0)
+ATUSdata = pd.read_excel('wquartertotals.xls', index_col = 0)
 SE = ATUSdata.iloc[:,0].values
 N  = ATUSdata.iloc[:,1].values
 HE = ATUSdata.iloc[:,2].values
@@ -129,3 +129,6 @@ Momdf.columns = varindex
 Momdf.index = momindex
 Momdf = Momdf.transpose()
 print (Momdf.to_latex())
+writer = pd.ExcelWriter('ATUS_Moms.xlsx')
+Momdf.to_excel(writer,'HP')
+writer.save()
